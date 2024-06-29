@@ -1,0 +1,178 @@
+openapi: 3.0.3
+info:
+  title: Product Service API
+  description: API for managaing products
+  version: '1.0.0'
+servers:
+  - url: https://mbmmx4ei9e.execute-api.eu-north-1.amazonaws.com/prod
+paths:
+  /products:
+    get:
+      summary: Get list of products
+      operationId: getProductsList
+      responses:
+        '200':
+          description: A list of products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      example: 'fed6182d-c7da-43e8-9e95-ea358632eefa'
+                    title:
+                      type: string
+                      example: 'Laptop'
+                    description:
+                      type: string
+                      example: 'Mac'
+                    count:
+                      type: number
+                      example: 11
+                    price:
+                      type: number
+                      example: 250
+        '500':
+          description: Error in backend
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 'Something goes wrong!'
+    options:
+      summary: Options
+      operationId: options
+      responses:
+        '200':
+          description: Preflight request
+          content:
+            application/json:
+              schema:
+                type: object
+    post:
+      summary: Add product
+      operationId: createProduct
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+                price:
+                  type: number
+                count:
+                  type: number
+      responses:
+        '200':
+          description: If product is added successfully
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          description: If invalid data type
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Invalid data!
+        '500':
+          description: Backend error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Somethong goes wrong!
+  /products/{id}:
+    get:
+      summary: Get product by ID
+      operationId: getProductsById
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID of the product
+          schema:
+            type: string
+            example: 'fed6182d-c7da-43e8-9e95-ea358632eefa'
+      responses:
+        '200':
+          description: A single product
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    example: 'fed6182d-c7da-43e8-9e95-ea358632eefa'
+                  title:
+                    type: string
+                    example: 'Laptop'
+                  description:
+                    type: string
+                    example: 'Mac'
+                  count:
+                    type: number
+                    example: 11
+                  price:
+                    type: number
+                    example: 250
+        '500':
+          description: Product not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Product not found!
+    delete:
+      summary: Delete product by ID
+      operationId: deleteProduct
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID of the product
+          schema:
+            type: string
+            example: 'fed6182d-c7da-43e8-9e95-ea358632eefa'
+      responses:
+        '200':
+          description: Successfully deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 'Successfully deleted!'
+        '500':
+          description: Product not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Product not found!
