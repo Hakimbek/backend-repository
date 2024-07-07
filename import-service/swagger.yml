@@ -1,0 +1,32 @@
+openapi: 3.0.3
+info:
+  title: Import Service API
+  description: API for import products via CSV file
+  version: '1.0.0'
+servers:
+  - url: https://z1lg8ki0s2.execute-api.eu-north-1.amazonaws.com/prod
+paths:
+  /import:
+    get:
+      summary: Get presigned url
+      operationId: importProductsFile
+      parameters:
+        - in: query
+          name: name
+          required: true
+          schema:
+            type: string
+            example: 'products.csv'
+      responses:
+        '200':
+          description: A presigned url
+        '500':
+          description: Error in backend
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 'Something goes wrong!'
