@@ -4,31 +4,25 @@ const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 exports.handler = async (event) => {
     try {
         const fileName = event.queryStringParameters.name;
-        console.log('Get name from queryStringParameters. name=' + fileName);
+        console.log(`Get name from queryStringParameters. name=${fileName}`);
 
         const bucketName = process.env.S3_BUCKET_NAME;
-        console.log('Get bucket name from env. bucketName=' + bucketName);
+        console.log(`Get bucket name from env. bucketName=${bucketName}`);
 
         const region = process.env.REGION;
-        console.log('Get region from env. region=' + region);
+        console.log(`Get region from env. region=${region}`);
 
         const key = `uploaded/${fileName}`;
-        console.log('Generate key. key=' + key);
+        console.log(`Generate key. key=${key}`);
 
         const params = {
             Bucket: bucketName,
             Key: key
         }
-        console.log('Generate params. params=' + params);
-
         const client = new S3Client({ region });
-        console.log('Creat S3 client');
-
         const command = new PutObjectCommand(params);
-        console.log('Creat PutObject command');
-
         const presignedUrl = await getSignedUrl(client, command);
-        console.log('Create presignedUrl. presignedUrl=' + presignedUrl);
+        console.log(`Create presignedUrl using bucket name and key.\npresignedUrl=${presignedUrl}`);
 
         return {
             statusCode: 200,

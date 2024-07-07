@@ -1,27 +1,27 @@
 const { S3Client, GetObjectCommand, CopyObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
-const csv = require("csv-parser");
-
-const client = new S3Client({});
+const { SendMessageCommand, SQSClient, GetQueueUrlCommand } = require("@aws-sdk/client-sqs");
+const csv = require('csv-parser');
 
 exports.handler = async (event) => {
     try {
         const bucket = event.Records[0].s3.bucket.name;
-        console.log('Get bucket name from event. bucket=' + bucket);
-
         const uploadedKey = decodeURIComponent(event.Records[0].s3.object.key.replace(/\+/g, ' '));
-        console.log('Get key from event. key=' + uploadedKey);
+        console.log(`Get bucket name and key from event\nkey=${uploadedKey}\nbucket=${bucket}`);
 
-        const getCommand = new GetObjectCommand({
+        const s3Client = new S3Client({});
+        const s3GetCommand = new GetObjectCommand({
             Bucket: bucket,
             Key: uploadedKey,
         });
-        console.log('Generate get command', getCommand);
-
-        const response = await client.send(getCommand);
-        console.log('Send command');
-
+        const response = await s3Client.send(s3GetCommand);
         const readableStream = response.Body;
-        console.log('Get body of response');
+        console.log('Get object from bucket using bucket name and key');
+
+        const sqsClient = new SQSClient({});
+        const getQueueUrlCommand = new GetQueueUrlCommand({ QueueName: 'catalogItemsQueue' });
+        const catalogItemsQueueUrlObject = await sqsClient.send(getQueueUrlCommand);
+        const catalogItemsQueueUrl = catalogItemsQueueUrlObject.QueueUrl;
+        console.log(`Get SQS URL\nurl=${catalogItemsQueueUrl}`);
 
         await new Promise((resolve, reject) => {
             readableStream
@@ -29,41 +29,42 @@ exports.handler = async (event) => {
                     delimiter: ',',
                     columns: true,
                 }))
-                .on("data", (data) => {
-                    console.log("Parsed product", data);
+                .on('data', async (data) => {
+                    console.log('Data', data);
+                    const sqsSendMessageCommand = new SendMessageCommand({
+                        QueueUrl: catalogItemsQueueUrl,
+                        MessageBody: JSON.stringify(data)
+                    });
+
+                    await sqsClient.send(sqsSendMessageCommand);
+                    console.log('Send SQS message');
                 })
-                .on("error", (err) => {
-                    console.error("Error", err);
-                    reject(err);
+                .on('error', (error) => {
+                    reject(error);
                 })
-                .on("end", async () => {
+                .on('end', async () => {
                     console.log('End of parsing')
 
                     const parsedKey = 'parsed/' + uploadedKey.split('/')[1]
-                    console.log('Get parsed key. parsedKey=' + parsedKey);
+                    console.log(`Get parsed key. parsedKey=${parsedKey}`);
 
-                    const copyCommand = new CopyObjectCommand({
+                    const s3CopyCommand = new CopyObjectCommand({
                         Bucket: bucket,
                         CopySource: `/${bucket}/${uploadedKey}`,
                         Key: parsedKey,
                     });
-                    console.log('Generate copy command.', copyCommand);
+                    await s3Client.send(s3CopyCommand);
+                    console.log('Copy object from uploaded bucket to parsed bucket');
 
-                    await client.send(copyCommand);
-                    console.log('Copy object');
-
-                    const deleteCommand = new DeleteObjectCommand({
+                    const s3DeleteCommand = new DeleteObjectCommand({
                         Bucket: bucket,
                         Key: uploadedKey,
                     });
-                    console.log('Generate delete command', deleteCommand);
-
-                    await client.send(deleteCommand);
-                    console.log('Delete object');
+                    await s3Client.send(s3DeleteCommand);
+                    console.log('Delete object from uploaded bucket');
                 })
         })
-
-    } catch (err) {
-        console.error("Error", err);
+    } catch (error) {
+        console.error("Error", error);
     }
 }

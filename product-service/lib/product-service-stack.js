@@ -1,7 +1,13 @@
-const { Stack } = require('aws-cdk-lib');
-const lambda = require('aws-cdk-lib/aws-lambda');
-const apigateway = require('aws-cdk-lib/aws-apigateway');
-const iam = require('aws-cdk-lib/aws-iam');
+const {
+  Stack,
+  aws_lambda,
+  aws_apigateway,
+  aws_iam,
+  aws_sqs,
+  aws_lambda_event_sources,
+  aws_sns,
+  aws_sns_subscriptions
+} = require('aws-cdk-lib');
 
 class ProductServiceStack extends Stack {
   /**
@@ -13,73 +19,102 @@ class ProductServiceStack extends Stack {
   constructor(scope, id, props) {
     super(scope, id, props);
 
-    const lambdaARole = new iam.Role(this, 'LambdaRole', {
-      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+    const lambdaARole = new aws_iam.Role(this, 'LambdaRole', {
+      assumedBy: new aws_iam.ServicePrincipal('lambda.amazonaws.com'),
     });
 
     lambdaARole.addManagedPolicy(
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonDynamoDBFullAccess')
+        aws_iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonDynamoDBFullAccess')
     );
+    lambdaARole.addManagedPolicy(
+        aws_iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSQSFullAccess')
+    );
+    lambdaARole.addManagedPolicy(
+        aws_iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchFullAccess')
+    );
+
+    const queue = new aws_sqs.Queue(this, 'SqsQueue', {
+      queueName: 'catalogItemsQueue',
+    })
 
     const ENVIRONMENT_VARIABLES = {
       PRODUCTS_TABLE: 'products',
       STOCKS_TABLE: 'stocks'
     }
 
-    const getProductsList = new lambda.Function(this, 'GetProductsListFunction', {
-      runtime: lambda.Runtime.NODEJS_16_X,
-      code: lambda.Code.fromAsset('lambda'),
+    const getProductsList = new aws_lambda.Function(this, 'GetProductsListFunction', {
+      runtime: aws_lambda.Runtime.NODEJS_20_X,
+      code: aws_lambda.Code.fromAsset('lambda'),
       handler: 'getProductsList.handler',
       role: lambdaARole,
       environment: ENVIRONMENT_VARIABLES
     });
 
-    const getProductById = new lambda.Function(this, 'GetProductByIdFunction', {
-      runtime: lambda.Runtime.NODEJS_16_X,
-      code: lambda.Code.fromAsset('lambda'),
+    const getProductById = new aws_lambda.Function(this, 'GetProductByIdFunction', {
+      runtime: aws_lambda.Runtime.NODEJS_20_X,
+      code: aws_lambda.Code.fromAsset('lambda'),
       handler: 'getProductById.handler',
       role: lambdaARole,
       environment: ENVIRONMENT_VARIABLES
     });
 
-    const createProduct = new lambda.Function(this, 'CreateProductFunction', {
-      runtime: lambda.Runtime.NODEJS_16_X,
-      code: lambda.Code.fromAsset('lambda'),
+    const createProduct = new aws_lambda.Function(this, 'CreateProductFunction', {
+      runtime: aws_lambda.Runtime.NODEJS_20_X,
+      code: aws_lambda.Code.fromAsset('lambda'),
       handler: 'createProduct.handler',
       role: lambdaARole,
       environment: ENVIRONMENT_VARIABLES
     })
 
-    const deleteProduct = new lambda.Function(this, 'DeleteProductFunction', {
-      runtime: lambda.Runtime.NODEJS_16_X,
-      code: lambda.Code.fromAsset('lambda'),
+    const deleteProduct = new aws_lambda.Function(this, 'DeleteProductFunction', {
+      runtime: aws_lambda.Runtime.NODEJS_20_X,
+      code: aws_lambda.Code.fromAsset('lambda'),
       handler: 'deleteProduct.handler',
       role: lambdaARole,
       environment: ENVIRONMENT_VARIABLES
     })
 
-    const options = new lambda.Function(this, 'Options', {
-      runtime: lambda.Runtime.NODEJS_16_X,
-      code: lambda.Code.fromAsset('lambda'),
+    const options = new aws_lambda.Function(this, 'Options', {
+      runtime: aws_lambda.Runtime.NODEJS_20_X,
+      code: aws_lambda.Code.fromAsset('lambda'),
       handler: 'options.handler',
       role: lambdaARole,
       environment: ENVIRONMENT_VARIABLES
     })
 
-    const productsApi = new apigateway.LambdaRestApi(this, 'ProductsApi', {
+    const catalogBatchProcess = new aws_lambda.Function(this, 'CatalogBatchProcess', {
+      runtime: aws_lambda.Runtime.NODEJS_20_X,
+      code: aws_lambda.Code.fromAsset('lambda'),
+      handler: 'catalogBatchProcess.handler',
+      role: lambdaARole,
+      environment: ENVIRONMENT_VARIABLES
+    })
+
+    const sqsEventSource = new aws_lambda_event_sources.SqsEventSource(queue, {
+      batchSize: 5
+    });
+    catalogBatchProcess.addEventSource(sqsEventSource);
+
+    const topic = new aws_sns.Topic(this, 'createProductTopic');
+    topic.addToResourcePolicy()
+    topic.addSubscription(new aws_sns_subscriptions.EmailSubscription('khakimbakhramov@gmail.com'))
+    const snsEventSource = new aws_lambda_event_sources.SnsEventSource(topic)
+    catalogBatchProcess.addEventSource(snsEventSource);
+
+    const productsApi = new aws_apigateway.LambdaRestApi(this, 'ProductsApi', {
       handler: getProductsList,
       proxy: false,
     });
 
     const getProductsListResource = productsApi.root.addResource('products');
     getProductsListResource.addMethod('GET');
-    getProductsListResource.addMethod('POST', new apigateway.LambdaIntegration(createProduct))
-    getProductsListResource.addMethod('OPTIONS', new apigateway.LambdaIntegration(options))
+    getProductsListResource.addMethod('POST', new aws_apigateway.LambdaIntegration(createProduct))
+    getProductsListResource.addMethod('OPTIONS', new aws_apigateway.LambdaIntegration(options))
 
     const getProductByIdResource = getProductsListResource.addResource('{id}');
-    getProductByIdResource.addMethod('GET', new apigateway.LambdaIntegration(getProductById))
-    getProductByIdResource.addMethod('DELETE', new apigateway.LambdaIntegration(deleteProduct))
-    getProductByIdResource.addMethod('OPTIONS', new apigateway.LambdaIntegration(options))
+    getProductByIdResource.addMethod('GET', new aws_apigateway.LambdaIntegration(getProductById))
+    getProductByIdResource.addMethod('DELETE', new aws_apigateway.LambdaIntegration(deleteProduct))
+    getProductByIdResource.addMethod('OPTIONS', new aws_apigateway.LambdaIntegration(options))
   }
 }
 
