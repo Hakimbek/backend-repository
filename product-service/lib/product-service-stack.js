@@ -32,14 +32,17 @@ class ProductServiceStack extends Stack {
     lambdaARole.addManagedPolicy(
         aws_iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchFullAccess')
     );
+    lambdaARole.addManagedPolicy(
+        aws_iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSNSFullAccess')
+    );
 
-    const queue = new aws_sqs.Queue(this, 'SqsQueue', {
-      queueName: 'catalogItemsQueue',
-    })
+    const topic = new aws_sns.Topic(this, 'createProductTopic');
+    topic.addSubscription(new aws_sns_subscriptions.EmailSubscription('khakimbakhramov@gmail.com'))
 
     const ENVIRONMENT_VARIABLES = {
       PRODUCTS_TABLE: 'products',
-      STOCKS_TABLE: 'stocks'
+      STOCKS_TABLE: 'stocks',
+      SNS_TOPIC_ARN: topic.topicArn
     }
 
     const getProductsList = new aws_lambda.Function(this, 'GetProductsListFunction', {
@@ -90,17 +93,6 @@ class ProductServiceStack extends Stack {
       environment: ENVIRONMENT_VARIABLES
     })
 
-    const sqsEventSource = new aws_lambda_event_sources.SqsEventSource(queue, {
-      batchSize: 5
-    });
-    catalogBatchProcess.addEventSource(sqsEventSource);
-
-    const topic = new aws_sns.Topic(this, 'createProductTopic');
-    topic.addToResourcePolicy()
-    topic.addSubscription(new aws_sns_subscriptions.EmailSubscription('khakimbakhramov@gmail.com'))
-    const snsEventSource = new aws_lambda_event_sources.SnsEventSource(topic)
-    catalogBatchProcess.addEventSource(snsEventSource);
-
     const productsApi = new aws_apigateway.LambdaRestApi(this, 'ProductsApi', {
       handler: getProductsList,
       proxy: false,
@@ -115,6 +107,14 @@ class ProductServiceStack extends Stack {
     getProductByIdResource.addMethod('GET', new aws_apigateway.LambdaIntegration(getProductById))
     getProductByIdResource.addMethod('DELETE', new aws_apigateway.LambdaIntegration(deleteProduct))
     getProductByIdResource.addMethod('OPTIONS', new aws_apigateway.LambdaIntegration(options))
+
+    const queue = new aws_sqs.Queue(this, 'SqsQueue', {
+      queueName: 'catalogItemsQueue',
+    })
+    const sqsEventSource = new aws_lambda_event_sources.SqsEventSource(queue, {
+      batchSize: 5
+    });
+    catalogBatchProcess.addEventSource(sqsEventSource);
   }
 }
 

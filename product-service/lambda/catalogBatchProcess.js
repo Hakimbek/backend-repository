@@ -1,4 +1,5 @@
 const AWS = require('aws-sdk');
+const { PublishCommand, SNSClient } = require('@aws-sdk/client-sns');
 const docClient = new AWS.DynamoDB.DocumentClient();
 
 exports.handler = async (event) => {
@@ -13,16 +14,7 @@ exports.handler = async (event) => {
             console.log('Data', data);
 
             if (!title || !description || !price || !count) {
-                return {
-                    statusCode: 400,
-                    headers: {
-                        "Access-Control-Allow-Origin": "*",
-                        "Access-Control-Allow-Headers": "*",
-                        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({ message: 'Invalid data!' }),
-                };
+               throw new Error('Wrong prop type');
             }
 
             await docClient.transactWrite({
@@ -41,28 +33,20 @@ exports.handler = async (event) => {
                     }
                 ]
             }).promise();
+            console.log('Add product');
+
+            const message = `Product has been created:\ntitle: ${title}\nprice: ${price}\ndescription: ${description}\ncount: ${count}`;
+            const snsClient = new SNSClient({});
+            const snsPublishCommand = new PublishCommand({
+                TopicArn: process.env.SNS_TOPIC_ARN,
+                Message: message
+            })
+            await snsClient.send(snsPublishCommand);
+            console.log('Send message', message);
         }
 
-        return {
-            statusCode: 200,
-            headers: {
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Headers": "*",
-                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ message: 'Successfully added!' }),
-        };
-    } catch {
-        return {
-            statusCode: 500,
-            header: {
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Headers": "*",
-                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ message: 'Something goes wrong!' })
-        }
+        console.log('Successfully added');
+    } catch (error) {
+        console.log(error);
     }
 }
