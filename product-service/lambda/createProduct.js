@@ -9,12 +9,7 @@ exports.handler = async (event) => {
         const description = String(data.description);
         const price = Number(data.price);
         const count = Number(data.count);
-
-        console.log('id=' + id);
-        console.log('title=' + title);
-        console.log('description=' + description);
-        console.log('price=' + price);
-        console.log('count=' + count);
+        console.log('Data', data);
 
         if (!title || !description || !price || !count) {
             return {
@@ -28,20 +23,6 @@ exports.handler = async (event) => {
                 body: JSON.stringify({ message: 'Invalid data!' }),
             };
         }
-
-        await docClient.put({
-            TableName: process.env.PRODUCTS_TABLE,
-            Item: { id, title, description, price }
-        }).promise();
-
-        console.log('PRODUCTS_TABLE=' + JSON.stringify(process.env.PRODUCTS_TABLE));
-
-        await docClient.put({
-            TableName: process.env.STOCKS_TABLE,
-            Item: { 'product_id': id, count }
-        }).promise();
-
-        console.log('STOCKS_TABLE=' + JSON.stringify(process.env.STOCKS_TABLE));
 
         const result = await docClient.transactWrite({
             TransactItems: [
